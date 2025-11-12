@@ -1,13 +1,13 @@
-name: RDP + Tailscale + RustDesk + (Optional) Chrome Remote Desktop (A)
+name: RDP + Tailscale + RustDesk + (Optional) Chrome Remote Desktop (A) made by mehraz 
 
 on:
   workflow_dispatch:
     inputs:
-      ts_tailnet:         { description: "Tailscale tailnet (e.g. you@gmail.com)", required: true }
+      ts_tailnet:         { description: "Tailscale tailnet (e.g. my hehe @gmail.com)", required: true }
       ts_api_key:         { description: "Tailscale API key (device admin, no Bearer)", required: true }
       ts_authkey:         { description: "Tailscale Auth key (reusable or ephemeral)", required: true }
       quick_test:         { description: "Run 5-minute test", type: boolean, default: false }
-      runtime_minutes:    { description: "Runtime (max 360; default 355 when not test)", required: false, default: "355" }
+      runtime_minutes:    { description: "Runtime (max 360; default 355 when not test)", required: false, default: "360" }
       do_purge:           { description: "Purge bullet* devices at start (single instance only)", required: false, default: "true" }
       cycles:             { description: "0=stop after A; N=handoffs left incl this run", required: false, default: "0" }
       rdp_count:          { description: "How many RDP instances (1-10) [ignored if CRD provided]", required: false, default: "1" }
@@ -65,7 +65,7 @@ jobs:
       max-parallel: 10
     timeout-minutes: 370
     env:
-      RDP_USER: Bullettemporary
+      RDP_USER: mehraz
       RDP_PASS: Bullet@12345
 
     steps:
@@ -179,7 +179,7 @@ jobs:
           Write-Host "Hostname: $hn  | Runtime: $runtime"
 
       # ---------- PURGE only for SINGLE INSTANCE ----------
-      - name: Purge bullet* devices (single-instance only)
+      - name: Purge mehraz* devices (single-instance only)
         if: ${{ needs.setup.outputs.multi == '0' }}
         run: |
           function Yes($v){ "$v" -match '^(?i:true|1|yes|on)$' }
