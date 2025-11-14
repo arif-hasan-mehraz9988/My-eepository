@@ -62,7 +62,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-      max-parallel: 10
+      max-parallel: 30
     timeout-minutes: 370
     env:
       RDP_USER: mehraz
