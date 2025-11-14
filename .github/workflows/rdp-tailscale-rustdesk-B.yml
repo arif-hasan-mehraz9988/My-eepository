@@ -62,8 +62,8 @@ jobs:
       max-parallel: 10
     timeout-minutes: 370
     env:
-      RDP_USER: MEHRAZ
-      RDP_PASS: Bullet@mehraz12345
+      RDP_USER: Minhazul islam mehraz
+      RDP_PASS: Bullet@12345
 
     steps:
       - name: Set CRD flag early (safe read)
