@@ -1,15 +1,15 @@
-name: Ubuntu RDP 
+name: Ubuntu RDP (User mehraz) - Fixed
 
 on:
   workflow_dispatch:
     inputs:
       crd_code:
-        description: 'Paste the Chrome Remote Desktop Debian Code (4/0A...)'
+        description: 'Paste the Debian Linux code (4/0A...)'
         required: true
       pin:
-        description: 'PIN for the session'
+        description: 'Set a 6-digit PIN'
         required: true
-        default: '1234567890'
+        default: '990088'
 
 jobs:
   build:
@@ -17,75 +17,78 @@ jobs:
     timeout-minutes: 360
 
     steps:
-    - name: System Update & Install
+    - name: 1. Install Desktop & Dependencies
       run: |
         sudo apt-get update
-        # Install XFCE, Chrome, and utilities
         sudo apt-get install -y --no-install-recommends \
           task-xfce-desktop xfce4 xfce4-goodies \
           curl wget xvfb python3-psutil
 
-    - name: Create User 'mehraz'
+    - name: 2. Create User 'mehraz'
       run: |
-        # 1. Create the user mehraz with home directory (-m) and bash shell (-s)
+        # Create user with home directory
         sudo useradd -m -s /bin/bash mehraz
         
-        # 2. Set the password to 990088
+        # Set password to 990088
         echo "mehraz:990088" | sudo chpasswd
         
-        # 3. Add mehraz to sudo group (admin access)
+        # Give sudo access
         sudo usermod -aG sudo mehraz
-        
-        # 4. Grant sudo usage without password prompt (optional, for smoother operation)
         echo "mehraz ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/mehraz
 
-    - name: Install Google Chrome
+    - name: 3. Install Google Chrome & Remote Desktop
       run: |
-        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-        sudo dpkg --install google-chrome-stable_current_amd64.deb || sudo apt-get install --fix-broken -y
+        # Download and install Chrome
+        wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+        sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install --fix-broken -y
         rm google-chrome-stable_current_amd64.deb
-
-    - name: Install Chrome Remote Desktop
-      run: |
-        wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
-        sudo dpkg --install chrome-remote-desktop_current_amd64.deb || sudo apt-get install --fix-broken -y
+        
+        # Download and install CRD
+        wget -q https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
+        sudo dpkg -i chrome-remote-desktop_current_amd64.deb || sudo apt-get install --fix-broken -y
         rm chrome-remote-desktop_current_amd64.deb
 
-    - name: Configure Session for 'mehraz'
+    - name: 4. Configure Session (Fixed Step)
       run: |
-        # Add mehraz to the CRD group
+        # Force stop any conflicting display managers
+        sudo systemctl disable gdm3 2>/dev/null || true
+        sudo service gdm3 stop 2>/dev/null || true
+        sudo systemctl disable lightdm 2>/dev/null || true
+        sudo service lightdm stop 2>/dev/null || true
+
+        # Ensure the group exists before adding the user
+        sudo groupadd -f chrome-remote-desktop
         sudo usermod -aG chrome-remote-desktop mehraz
 
-        # Create the session file specifically in mehraz's home folder
-        # This tells CRD to use XFCE when mehraz logs in
-        sudo -u mehraz bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /home/mehraz/.chrome-remote-desktop-session'
+        # Create the session configuration for XFCE
+        # We use 'sudo tee' to write as root, then fix ownership
+        echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" | sudo tee /home/mehraz/.chrome-remote-desktop-session
         
-        # Ensure config directory exists with correct permissions for mehraz
-        sudo -u mehraz mkdir -p /home/mehraz/.config/chrome-remote-desktop
-        sudo -u mehraz chmod 700 /home/mehraz/.config/chrome-remote-desktop
+        # Create config directory
+        sudo mkdir -p /home/mehraz/.config/chrome-remote-desktop
+        
+        # Fix permissions: Give everything to mehraz
+        sudo chown -R mehraz:mehraz /home/mehraz
+        sudo chmod 700 /home/mehraz/.config/chrome-remote-desktop
 
-        # Disable conflicting display managers
-        sudo systemctl disable lightdm.service || true
-        sudo service lightdm stop || true
-
-    - name: Start Chrome Remote Desktop (as mehraz)
+    - name: 5. Start Chrome Remote Desktop
       env:
         DISPLAY_CODE: ${{ github.event.inputs.crd_code }}
         PIN: ${{ github.event.inputs.pin }}
       run: |
-        # We must run this command AS mehraz using 'sudo -u mehraz'
-        # We pass the environment variables into the sudo command
-        
+        # Pass environment variables explicitly into the sudo command
         sudo -u mehraz bash -c 'DISPLAY= /opt/google/chrome-remote-desktop/start-host \
           --code="'"$DISPLAY_CODE"'" \
           --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
           --name="Mehraz-Desktop" \
           --pin="'"$PIN"'"'
 
-    - name: Keep Alive
+    - name: 6. Keep Alive Loop
       run: |
-        echo "Session successfully started for user: mehraz"
+        echo "=========================================="
+        echo "Session Started Successfully"
+        echo "User: mehraz"
         echo "Password: 990088"
-        echo "Access at: https://remotedesktop.google.com/access"
+        echo "Go to: https://remotedesktop.google.com/access"
+        echo "=========================================="
         while true; do sleep 60; done
-
