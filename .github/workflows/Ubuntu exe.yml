@@ -1,13 +1,13 @@
-name: Ubuntu Remote Desktop (XFCE)
+name: Ubuntu Remote Desktop (v2 Robust)
 
 on:
   workflow_dispatch:
     inputs:
       crd_code:
-        description: 'Paste the Chrome Remote Desktop "Debian Linux" code here'
+        description: 'Paste the Debian Linux code from remotedesktop.google.com/headless'
         required: true
       pin:
-        description: 'Create a 6-digit PIN'
+        description: 'Set a 6-digit PIN'
         required: true
         default: '123456'
 
@@ -17,10 +17,12 @@ jobs:
     timeout-minutes: 360 # 6 hours max
 
     steps:
-    - name: Initial Setup & Update
+    - name: Update & Install Essentials
       run: |
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends curl wget task-xfce-desktop xfce4 xfce4-goodies
+        sudo apt-get install -y --no-install-recommends \
+          curl wget task-xfce-desktop xfce4 xfce4-goodies \
+          xvfb python3-psutil
 
     - name: Install Google Chrome
       run: |
@@ -34,41 +36,53 @@ jobs:
         sudo dpkg --install chrome-remote-desktop_current_amd64.deb || sudo apt-get install --fix-broken -y
         rm chrome-remote-desktop_current_amd64.deb
 
-    - name: Configure XFCE Session
-      # Fixes the black screen issue by forcing XFCE instead of GNOME
+    - name: Configure XFCE (Force Headless)
       run: |
+        # Set XFCE as the default session
         sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
         
-        # Disable LightDM/GDM to prevent display conflicts
-        sudo systemctl disable lightdm.service || true
-        sudo service lightdm stop || true
+        # Remove interfering display managers (CRITICAL FIX for connection errors)
+        sudo apt-get remove -y gdm3 lightdm || true
+        sudo apt-get purge -y gdm3 lightdm || true
+        sudo apt-get autoremove -y
 
-    - name: Setup User & Permissions
+    - name: Setup User Environment
       run: |
-        # Add current user to the chrome-remote-desktop group
         sudo usermod -a -G chrome-remote-desktop $USER
         
-        # Create config directory
+        # Create config dir with correct permissions
         mkdir -p ~/.config/chrome-remote-desktop
         chown "$USER:$USER" ~/.config/chrome-remote-desktop
         chmod 700 ~/.config/chrome-remote-desktop
+        
+        # Set default screen size to prevent "headless" crashes
+        echo "CHROME_REMOTE_DESKTOP_DEFAULT_DESKTOP_SIZES=1920x1080" >> ~/.profile
 
     - name: Start Chrome Remote Desktop
       env:
         DISPLAY_CODE: ${{ github.event.inputs.crd_code }}
         PIN: ${{ github.event.inputs.pin }}
       run: |
-        # The DISPLAY= variable must be empty to allow CRD to assign its own
+        # Stop any lingering services
+        /opt/google/chrome-remote-desktop/chrome-remote-desktop --stop-modeless || true
+        
+        # Start the host using the native binary
         DISPLAY= /opt/google/chrome-remote-desktop/start-host \
           --code="$DISPLAY_CODE" \
           --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
-          --name="GitHub-Runner-XFCE" \
+          --name="GitHub-XFCE-Runner" \
           --pin="$PIN"
 
-    - name: Keep Alive Loop
+    - name: Verify & Keep Alive
       run: |
-        echo "Session Started successfully."
-        echo "Access here: https://remotedesktop.google.com/access"
-        # Simple infinite loop to keep the runner active
-        while true; do sleep 30; done
-
+        # Check if the service is actually running
+        if ! ps aux | grep -q "chrome-remote-desktop"; then
+          echo "ERROR: Chrome Remote Desktop failed to start."
+          exit 1
+        fi
+        
+        echo "SUCCESS: Session is running."
+        echo "Go to https://remotedesktop.google.com/access to connect."
+        
+        # Loop to keep the machine running
+        while true; do sleep 60; done
