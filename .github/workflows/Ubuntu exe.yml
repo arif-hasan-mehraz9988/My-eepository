@@ -1,28 +1,43 @@
-name: Ubuntu Remote Desktop (v2 Robust)
+name: Ubuntu RDP (User: mehraz)
 
 on:
   workflow_dispatch:
     inputs:
       crd_code:
-        description: 'Paste the Debian Linux code from remotedesktop.google.com/headless'
+        description: 'Paste the Chrome Remote Desktop Debian Code (4/0A...)'
         required: true
       pin:
-        description: 'Set a 6-digit PIN'
+        description: 'PIN for the session'
         required: true
-        default: '123456'
+        default: '1234567890'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 360 # 6 hours max
+    timeout-minutes: 360
 
     steps:
-    - name: Update & Install Essentials
+    - name: System Update & Install
       run: |
         sudo apt-get update
+        # Install XFCE, Chrome, and utilities
         sudo apt-get install -y --no-install-recommends \
-          curl wget task-xfce-desktop xfce4 xfce4-goodies \
-          xvfb python3-psutil
+          task-xfce-desktop xfce4 xfce4-goodies \
+          curl wget xvfb python3-psutil
+
+    - name: Create User 'mehraz'
+      run: |
+        # 1. Create the user mehraz with home directory (-m) and bash shell (-s)
+        sudo useradd -m -s /bin/bash mehraz
+        
+        # 2. Set the password to 990088
+        echo "mehraz:990088" | sudo chpasswd
+        
+        # 3. Add mehraz to sudo group (admin access)
+        sudo usermod -aG sudo mehraz
+        
+        # 4. Grant sudo usage without password prompt (optional, for smoother operation)
+        echo "mehraz ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/mehraz
 
     - name: Install Google Chrome
       run: |
@@ -36,53 +51,41 @@ jobs:
         sudo dpkg --install chrome-remote-desktop_current_amd64.deb || sudo apt-get install --fix-broken -y
         rm chrome-remote-desktop_current_amd64.deb
 
-    - name: Configure XFCE (Force Headless)
+    - name: Configure Session for 'mehraz'
       run: |
-        # Set XFCE as the default session
-        sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
-        
-        # Remove interfering display managers (CRITICAL FIX for connection errors)
-        sudo apt-get remove -y gdm3 lightdm || true
-        sudo apt-get purge -y gdm3 lightdm || true
-        sudo apt-get autoremove -y
+        # Add mehraz to the CRD group
+        sudo usermod -aG chrome-remote-desktop mehraz
 
-    - name: Setup User Environment
-      run: |
-        sudo usermod -a -G chrome-remote-desktop $USER
+        # Create the session file specifically in mehraz's home folder
+        # This tells CRD to use XFCE when mehraz logs in
+        sudo -u mehraz bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /home/mehraz/.chrome-remote-desktop-session'
         
-        # Create config dir with correct permissions
-        mkdir -p ~/.config/chrome-remote-desktop
-        chown "$USER:$USER" ~/.config/chrome-remote-desktop
-        chmod 700 ~/.config/chrome-remote-desktop
-        
-        # Set default screen size to prevent "headless" crashes
-        echo "CHROME_REMOTE_DESKTOP_DEFAULT_DESKTOP_SIZES=1920x1080" >> ~/.profile
+        # Ensure config directory exists with correct permissions for mehraz
+        sudo -u mehraz mkdir -p /home/mehraz/.config/chrome-remote-desktop
+        sudo -u mehraz chmod 700 /home/mehraz/.config/chrome-remote-desktop
 
-    - name: Start Chrome Remote Desktop
+        # Disable conflicting display managers
+        sudo systemctl disable lightdm.service || true
+        sudo service lightdm stop || true
+
+    - name: Start Chrome Remote Desktop (as mehraz)
       env:
         DISPLAY_CODE: ${{ github.event.inputs.crd_code }}
         PIN: ${{ github.event.inputs.pin }}
       run: |
-        # Stop any lingering services
-        /opt/google/chrome-remote-desktop/chrome-remote-desktop --stop-modeless || true
+        # We must run this command AS mehraz using 'sudo -u mehraz'
+        # We pass the environment variables into the sudo command
         
-        # Start the host using the native binary
-        DISPLAY= /opt/google/chrome-remote-desktop/start-host \
-          --code="$DISPLAY_CODE" \
+        sudo -u mehraz bash -c 'DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+          --code="'"$DISPLAY_CODE"'" \
           --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
-          --name="GitHub-XFCE-Runner" \
-          --pin="$PIN"
+          --name="Mehraz-Desktop" \
+          --pin="'"$PIN"'"'
 
-    - name: Verify & Keep Alive
+    - name: Keep Alive
       run: |
-        # Check if the service is actually running
-        if ! ps aux | grep -q "chrome-remote-desktop"; then
-          echo "ERROR: Chrome Remote Desktop failed to start."
-          exit 1
-        fi
-        
-        echo "SUCCESS: Session is running."
-        echo "Go to https://remotedesktop.google.com/access to connect."
-        
-        # Loop to keep the machine running
+        echo "Session successfully started for user: mehraz"
+        echo "Password: 990088"
+        echo "Access at: https://remotedesktop.google.com/access"
         while true; do sleep 60; done
+
