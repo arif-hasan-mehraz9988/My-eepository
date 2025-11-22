@@ -1,23 +1,14 @@
-name: SSHX Access
+name: SSH via tmate
 
 on:
   workflow_dispatch:
 
 jobs:
-  sshx:
+  ssh:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install sshx
-        run: |
-          curl -fsSL https://get.sshx.io | sh
-
-      - name: Start sshx session
-        run: |
-          ./sshx --with-browser
-        # The --with-browser flag will print a browser link in the logs
-
-      - name: Keep runner alive
-        run: sleep 3600
+      - name: Start tmate session
+        uses: mxschmitt/action-tmate@v3
