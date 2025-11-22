@@ -1,93 +1,23 @@
-name: Ubuntu RDP (User mehraz) - Final Fi
+name: SSHX Access
 
 on:
   workflow_dispatch:
-    inputs:
-      crd_code:
-        description: 'Paste a FRESH Debian Linux code here'
-        required: true
-      pin:
-        description: 'PIN'
-        required: true
-        default: '990088'
 
 jobs:
-  build:
+  sshx:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-
     steps:
-    - name: 1. Install Desktop & Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends \
-          task-xfce-desktop xfce4 xfce4-goodies \
-          curl wget xvfb python3-psutil
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: 2. Create User 'mehraz'
-      run: |
-        sudo useradd -m -s /bin/bash mehraz
-        echo "mehraz:990088" | sudo chpasswd
-        sudo usermod -aG sudo mehraz
-        echo "mehraz ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/mehraz
+      - name: Install sshx
+        run: |
+          curl -fsSL https://get.sshx.io | sh
 
-    - name: 3. Install Chrome & CRD
-      run: |
-        wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-        sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install --fix-broken -y
-        rm google-chrome-stable_current_amd64.deb
-        
-        wget -q https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
-        sudo dpkg -i chrome-remote-desktop_current_amd64.deb || sudo apt-get install --fix-broken -y
-        rm chrome-remote-desktop_current_amd64.deb
+      - name: Start sshx session
+        run: |
+          ./sshx --with-browser
+        # The --with-browser flag will print a browser link in the logs
 
-    - name: 4. Configure Session (Permission Fix)
-      run: |
-        # Disable Login Managers to prevent conflicts
-        sudo systemctl disable gdm3 2>/dev/null || true
-        sudo service gdm3 stop 2>/dev/null || true
-        sudo systemctl disable lightdm 2>/dev/null || true
-        sudo service lightdm stop 2>/dev/null || true
-
-        # Create Group if missing
-        sudo groupadd -f chrome-remote-desktop
-        sudo usermod -aG chrome-remote-desktop mehraz
-
-        # Create Session File
-        echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" | sudo tee /home/mehraz/.chrome-remote-desktop-session
-        
-        # Create Config Dir & Set Ownership
-        sudo mkdir -p /home/mehraz/.config/chrome-remote-desktop
-        sudo chown -R mehraz:mehraz /home/mehraz
-        sudo chmod 700 /home/mehraz/.config/chrome-remote-desktop
-
-    - name: 5. Start CRD (Auth Fix)
-      env:
-        DISPLAY_CODE: ${{ github.event.inputs.crd_code }}
-        PIN: ${{ github.event.inputs.pin }}
-      run: |
-        # 1. Fix Hostname Resolution (Crucial for sudo auth)
-        HOSTNAME=$(hostname)
-        echo "127.0.0.1 $HOSTNAME" | sudo tee -a /etc/hosts
-
-        # 2. Trim whitespace from code input
-        TRIMMED_CODE=$(echo "$DISPLAY_CODE" | xargs)
-
-        # 3. Run Start Command with Explicit Environment
-        # We explicitly set USER and HOME to ensure CRD knows it is 'mehraz'
-        sudo -u mehraz bash -c '
-          export USER=mehraz
-          export HOME=/home/mehraz
-          export DISPLAY=
-          
-          /opt/google/chrome-remote-desktop/start-host \
-          --code="'"$TRIMMED_CODE"'" \
-          --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
-          --name="Mehraz-PC" \
-          --pin="'"$PIN"'"
-        '
-
-    - name: 6. Keep Alive
-      run: |
-        echo "Session Running."
-        while true; do sleep 60; done
+      - name: Keep runner alive
+        run: sleep 3600
